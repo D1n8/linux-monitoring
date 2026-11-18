@@ -1,0 +1,59 @@
+name: goinmetrics
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: goinmetrics
+      POSTGRES_USER: goinmetrics
+      POSTGRES_INITDB_ARGS: "--auth-local=scram-sha-256 --auth-host=scram-sha-256"
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run ./start.sh to generate credentials}
+    command: ["postgres", "-c", "listen_addresses=", "-c", "shared_buffers=32MB", "-c", "max_connections=20", "-c", "work_mem=2MB", "-c", "unix_socket_permissions=0777"]
+    volumes:
+      - data:/var/lib/postgresql/data
+      - socket:/var/run/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U goinmetrics -d goinmetrics"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    mem_limit: 256m
+    shm_size: 64m
+    logging:
+      driver: json-file
+      options: {max-size: "5m", max-file: "2"}
+  app:
+    build: .
+    restart: unless-stopped
+    # Linux host networking exposes host NIC counters. HTTP still binds loopback only.
+    network_mode: host
+    uts: host
+    environment:
+      PGHOST: /var/run/postgresql
+      PGUSER: goinmetrics
+      PGDATABASE: goinmetrics
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      HOST_PROC: /host/proc
+      HOST_ROOT: /host/root
+      LISTEN_ADDR: 127.0.0.1:9099
+    volumes:
+      - socket:/var/run/postgresql:ro
+      - /proc:/host/proc:ro
+      - /:/host/root:ro,rslave
+    depends_on:
+      postgres: {condition: service_healthy}
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    read_only: true
+    mem_limit: 128m
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/goinmetrics", "healthcheck"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    logging:
+      driver: json-file
+      options: {max-size: "5m", max-file: "2"}
+volumes:
+  data:
+  socket:

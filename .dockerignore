@@ -1,0 +1,11 @@
+.git
+.agents
+.aws
+.codex
+.env
+.env.*
+web/node_modules
+web/.nuxt
+web/.output
+bin
+internal/web/public

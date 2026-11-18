@@ -1,0 +1,120 @@
+name: release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  verify:
+    uses: ./.github/workflows/ci.yml
+  image:
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.ref.outputs.image }}
+      version: ${{ steps.ref.outputs.version }}
+      stable: ${{ steps.ref.outputs.stable }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select image version
+        id: ref
+        shell: bash
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/goinmetrics"
+          version="sha-${GITHUB_SHA::12}"
+          stable=false
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then
+            if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo 'Release tag must use vMAJOR.MINOR.PATCH.' >&2
+              exit 1
+            fi
+            version="$GITHUB_REF_NAME"
+            stable=true
+          fi
+          printf 'image=%s\nversion=%s\nstable=%s\n' "$image" "$version" "$stable" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and publish both architectures
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.ref.outputs.image }}:${{ steps.ref.outputs.version }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+  bundle:
+    needs: image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Download and package the ready image
+        env:
+          IMAGE: ${{ needs.image.outputs.image }}:${{ needs.image.outputs.version }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          docker pull --platform "linux/$ARCH" "$IMAGE"
+          ./scripts/package-release.sh "$IMAGE" "linux/$ARCH" dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: goinmetrics-linux-${{ matrix.arch }}
+          path: dist/*
+          if-no-files-found: error
+  publish:
+    needs: [image, bundle]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: goinmetrics-linux-*
+          merge-multiple: true
+          path: dist
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - name: Publish release archives
+        if: needs.image.outputs.stable == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.image.outputs.version }}
+        run: |
+          if ! gh release view "$VERSION" >/dev/null 2>&1; then
+            gh release create "$VERSION" --verify-tag --generate-notes --title "GoInMetrics $VERSION"
+          fi
+          gh release upload "$VERSION" dist/* --clobber
+      - name: Promote the verified stable image
+        if: needs.image.outputs.stable == 'true'
+        env:
+          IMAGE: ${{ needs.image.outputs.image }}
+          VERSION: ${{ needs.image.outputs.version }}
+        run: docker buildx imagetools create --tag "$IMAGE:latest" "$IMAGE:$VERSION"

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { type Metric, type Point, valueText, clockTime, metricNames } from '~/composables/useMetrics'
-const props = withDefaults(defineProps<{ points: Point[]; metric: Metric; from: number; to: number; color?: string; small?: boolean }>(), { color: 'var(--chart-cpu)', small: false })
+const props = withDefaults(defineProps<{ points: Point[]; metric: Metric; from: number; to: number; color?: string; small?: boolean; scaleMax?: number }>(), { color: 'var(--chart-cpu)', small: false })
 const width = 900, height = 240, hover = ref<number | null>(null)
-const max = computed(() => props.metric === 'rx' || props.metric === 'tx' ? Math.max(1024, ...props.points.flatMap(p => [p[props.metric] ?? 0, p[`${props.metric}_max`] ?? 0])) * 1.15 : 100)
+const max = computed(() => props.scaleMax && props.scaleMax > 0 ? props.scaleMax : props.metric === 'rx' || props.metric === 'tx' ? Math.max(1024, ...props.points.flatMap(p => [p[props.metric] ?? 0, p[`${props.metric}_max`] ?? 0])) * 1.15 : 100)
 const x = (time: string) => Math.max(0, Math.min(width, (Date.parse(time) - props.from) / Math.max(1, props.to - props.from) * width))
 const y = (value: number) => height - Math.min(1, Math.max(0, value / max.value)) * height
 const segments = computed(() => {

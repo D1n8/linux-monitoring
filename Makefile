@@ -1,4 +1,4 @@
-.PHONY: start stop test frontend build dev
+.PHONY: start stop test frontend build dev image
 start:
 	./start.sh
 stop:
@@ -14,6 +14,10 @@ build: frontend
 test:
 	go test -race ./...
 	go vet ./...
-	cd web && npm run typecheck
+	python3 -m unittest discover -s scripts/tests -v
+	cd web && npm run typecheck && npm test
 dev:
 	cd web && npm run dev
+
+image:
+	./start.sh --build

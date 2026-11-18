@@ -107,7 +107,7 @@ func (s *Store) History(ctx context.Context, from, to time.Time) ([]Point, int, 
 	for _, metric := range []string{"cpu", "memory", "disk", "rx", "tx"} {
 		query += fmt.Sprintf("CASE WHEN count(data->>'%s')=count(*) THEN avg((data->>'%s')::float8) END,min((data->>'%s')::float8),max((data->>'%s')::float8),", metric, metric, metric, metric)
 	}
-	query += `count(*),extract(epoch from max(time)-min(time))::float8 FROM samples WHERE time >= $1 AND time <= $2 GROUP BY 1 ORDER BY 1`
+	query += `count(*),extract(epoch from max(time)-min(time))::float8 FROM samples WHERE time >= $1 AND time < $2 GROUP BY 1 ORDER BY 1`
 	rows, err := s.Pool.Query(ctx, query, from, to, step)
 	if err != nil {
 		return nil, step, err

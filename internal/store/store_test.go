@@ -43,6 +43,18 @@ func TestPostgresHistorySettingsAndRetention(t *testing.T) {
 	if err != nil || len(points) != 4 {
 		t.Fatalf("points=%+v err=%v", points, err)
 	}
+	// Adjacent comparison intervals must not count a boundary sample twice.
+	left, _, err := s.History(ctx, now, now.Add(2*time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	right, _, err := s.History(ctx, now.Add(2*time.Second), now.Add(4*time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(left) != 2 || len(right) != 2 {
+		t.Fatalf("adjacent ranges overlap: left=%d right=%d", len(left), len(right))
+	}
 	if err = s.SetEnabled(ctx, false); err != nil {
 		t.Fatal(err)
 	}

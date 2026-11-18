@@ -25,8 +25,7 @@ services:
       driver: json-file
       options: {max-size: "5m", max-file: "2"}
   app:
-    image: goinmetrics-app:latest
-    build: .
+    image: ${GOINMETRICS_IMAGE:-ghcr.io/d1n8/goinmetrics:latest}
     restart: unless-stopped
     # Linux host networking exposes host NIC counters. HTTP still binds loopback only.
     network_mode: host

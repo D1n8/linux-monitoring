@@ -14,3 +14,7 @@ internal/web/public/*
 
 __pycache__/
 *.pyc
+
+dist/
+goinmetrics-image.tar.gz
+SHA256SUMS

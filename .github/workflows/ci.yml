@@ -1,5 +1,9 @@
 name: verify
-on: [push, pull_request]
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_call:
 permissions:
   contents: read
 jobs:
@@ -31,6 +35,8 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci --prefix web --no-audit --no-fund
       - run: npm run typecheck --prefix web
+      - run: npm test --prefix web
+      - run: python3 -m unittest discover -s scripts/tests -v
       - run: npm run generate --prefix web
       - run: cp -R web/.output/public/. internal/web/public/
       - run: go test -race ./...

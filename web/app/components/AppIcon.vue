@@ -1,6 +1,7 @@
 <script setup lang="ts">
 withDefaults(defineProps<{ name: string; size?: number }>(), { size: 20 })
 const paths: Record<string, string> = {
+  compare: 'M3 3h7v18H3z M14 3h7v18h-7z M6 7h1 M6 11h1 M6 15h1 M17 7h1 M17 11h1 M17 15h1',
   menu: 'M4 6h16 M4 12h16 M4 18h16',
   sun: 'M12 3v2 M12 19v2 M3 12h2 M19 12h2 M5.64 5.64l1.42 1.42 M16.94 16.94l1.42 1.42 M5.64 18.36l1.42-1.42 M16.94 7.06l1.42-1.42',
   moon: 'M20.5 13A8.5 8.5 0 0 1 11 3.5 8.5 8.5 0 1 0 20.5 13',

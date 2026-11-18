@@ -1,0 +1,6 @@
+# Explicit development mode; the default deployment never invokes a compiler.
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile

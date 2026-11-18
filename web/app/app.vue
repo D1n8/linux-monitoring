@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { bytes, clockTime, metricNames, valueText, type Metric } from '~/composables/useMetrics'
-const { sample, points, host, health, connected, paused, range, loading, error, historyError, stale, monitoringEnabled, start, end, loadHistory, loadMeta, setMonitoring, goLive } = useMetrics()
 const page = ref('overview'), metric = ref<Metric>('cpu'), sidebarHidden = ref(false), mobileOpen = ref(false)
+const isResources = computed(() => ['overview', 'cpu', 'memory', 'disk', 'network'].includes(page.value))
+const { sample, points, host, health, connected, paused, range, loading, error, historyError, stale, monitoringEnabled, start, end, loadHistory, loadMeta, setMonitoring, goLive } = useMetrics(isResources)
 const isMobile = ref(false)
 const sidebarTab = ref<HTMLButtonElement | null>(null)
 const sidebarOpen = computed(() => isMobile.value ? mobileOpen.value : !sidebarHidden.value)
@@ -10,7 +11,7 @@ function updateViewport() { isMobile.value = viewport?.matches ?? false; if (!is
 const theme = ref<'dark' | 'light'>('dark'), serviceBusy = ref(false), serviceError = ref('')
 const nav = [
   { id: 'overview', name: 'Обзор', icon: 'grid' }, { id: 'cpu', name: 'Процессор', icon: 'cpu' },
-  { id: 'memory', name: 'Память', icon: 'memory' }, { id: 'disk', name: 'Диски', icon: 'disk' }, { id: 'network', name: 'Сеть', icon: 'network' }
+  { id: 'memory', name: 'Память', icon: 'memory' }, { id: 'disk', name: 'Диски', icon: 'disk' }, { id: 'network', name: 'Сеть', icon: 'network' }, { id: 'compare', name: 'Сравнение периодов', icon: 'compare' }
 ]
 const cards: { metric: Metric; title: string; icon: string; color: string }[] = [
   { metric: 'cpu', title: 'Процессор', icon: 'cpu', color: 'var(--chart-cpu)' },
@@ -18,8 +19,7 @@ const cards: { metric: Metric; title: string; icon: string; color: string }[] = 
   { metric: 'disk', title: 'Диски', icon: 'disk', color: 'var(--chart-disk)' },
   { metric: 'rx', title: 'Входящий трафик', icon: 'network', color: 'var(--chart-network)' }
 ]
-const titles: Record<string, string> = { overview: 'Обзор сервера', cpu: 'Процессор', memory: 'Оперативная память', disk: 'Файловые системы', network: 'Сетевая активность', docs: 'Документация', about: 'Состояние сервиса' }
-const isResources = computed(() => ['overview', 'cpu', 'memory', 'disk', 'network'].includes(page.value))
+const titles: Record<string, string> = { overview: 'Обзор сервера', cpu: 'Процессор', memory: 'Оперативная память', disk: 'Файловые системы', network: 'Сетевая активность', compare: 'Сравнение периодов', docs: 'Документация', about: 'Состояние сервиса' }
 const connectionText = computed(() => !monitoringEnabled.value ? 'Мониторинг выключен' : paused.value ? 'Просмотр на паузе' : !connected.value || stale.value ? 'Нет свежих данных' : 'В реальном времени')
 const currentColor = computed(() => cards.find(c => c.metric === metric.value)?.color ?? 'var(--chart-network)')
 const currentValues = computed(() => points.value.map(p => p[metric.value]).filter((v): v is number => v != null))
@@ -97,6 +97,7 @@ onBeforeUnmount(() => viewport?.removeEventListener('change', updateViewport))
 
         <template v-else-if="page === 'about'"><section class="panel service-control"><div><h2>{{ monitoringEnabled ? 'Мониторинг включён' : 'Мониторинг выключен' }}</h2><p>Остановка прекращает чтение счётчиков, запись и очистку истории. Панель и PostgreSQL остаются запущены для просмотра и повторного включения.</p></div><button class="button" :class="monitoringEnabled ? 'secondary' : 'primary'" :disabled="serviceBusy || !health" @click="toggleService"><AppIcon name="power" :size="17" />{{ serviceBusy ? 'Меняем состояние…' : monitoringEnabled ? 'Остановить сбор' : 'Включить сбор' }}</button></section><div class="diagnostics-grid"><section class="panel"><div class="panel-heading"><h2>Состояние наблюдателя</h2><button class="icon-button" aria-label="Обновить состояние" @click="loadMeta"><AppIcon name="refresh" :size="18" /></button></div><dl class="diagnostics"><div><dt>Мониторинг</dt><dd :class="{ 'accent-text': monitoringEnabled }">{{ monitoringEnabled ? 'Включён' : 'Выключен' }}</dd></div><div><dt>Соединение с панелью</dt><dd>{{ connected ? 'Подключено' : 'Переподключение…' }}</dd></div><div><dt>Хранилище</dt><dd>{{ health ? health.storage_ok ? monitoringEnabled ? 'Запись работает' : 'Сбор остановлен' : 'Ошибка записи' : 'Проверяем…' }}</dd></div><div><dt>Последняя запись</dt><dd>{{ health?.last_saved ? clockTime(health.last_saved) : 'Ожидается' }}</dd></div><div><dt>Время одного сбора</dt><dd>{{ sample?.collection_ms.toFixed(2) ?? '—' }} мс</dd></div><div><dt>Очередь записи</dt><dd>{{ health?.queue ?? '—' }} / 60</dd></div><div><dt>Несохранённые измерения</dt><dd>{{ health?.dropped ?? '—' }}</dd></div><div><dt>Пропущенные циклы</dt><dd>{{ health?.missed ?? '—' }}</dd></div><div><dt>Ядро Linux</dt><dd>{{ host?.kernel || '—' }}</dd></div></dl></section><section class="panel access-panel"><div class="panel-heading"><h2>Полное выключение сервиса</h2><AppIcon name="power" /></div><p>Чтобы полностью остановить приложение и PostgreSQL и освободить их ресурсы, выполните в каталоге проекта:</p><pre><code>./stop.sh</code></pre><p>Данные и настройки сохранятся. Повторный запуск:</p><pre><code>./start.sh</code></pre><div class="access-note"><AppIcon name="info" :size="18" /><span>Выключенное в панели состояние мониторинга сохраняется между запусками. После запуска нажмите «Включить мониторинг».</span></div></section></div></template>
 
+        <PeriodComparison v-else-if="page === 'compare'" />
         <ServiceDocs v-else-if="page === 'docs'" />
         <footer class="page-footer"><span>{{ sample ? `Последнее измерение: ${clockTime(sample.time)}` : 'Нет текущих измерений' }}</span></footer>
       </main>

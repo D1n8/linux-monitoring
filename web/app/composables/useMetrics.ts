@@ -1,3 +1,4 @@
+import type { Ref } from 'vue'
 export type Metric = 'cpu' | 'memory' | 'disk' | 'rx' | 'tx'
 export type Sample = {
   time: string; cpu: number | null; memory: number | null; disk: number | null
@@ -19,7 +20,7 @@ export function valueText(value: number | null | undefined, metric: Metric): str
   return value == null ? '—' : metric === 'rx' || metric === 'tx' ? bytes(value, true) : `${value.toLocaleString('ru-RU', { maximumFractionDigits: 1 })}%`
 }
 export const clockTime = (value: string) => new Date(value).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-export function useMetrics() {
+export function useMetrics(historyActive: Ref<boolean> = ref(true)) {
   const sample = ref<Sample | null>(null), points = ref<Point[]>([])
   const host = ref<{ name: string; os: string; kernel: string; cores: number; uptime: number } | null>(null)
   const health = ref<Health | null>(null), connected = ref(false), paused = ref(false), range = ref(900), loading = ref(false)
@@ -32,7 +33,7 @@ export function useMetrics() {
   let stream: EventSource | undefined, interval: ReturnType<typeof setInterval> | undefined, historyController: AbortController | undefined
   let disposed = false, metaBusy = false, metadataController: AbortController | undefined, lastMeta = 0, lastHistory = 0
   async function loadHistory() {
-    if (disposed) return
+    if (disposed || !historyActive.value) return
     historyController?.abort(); const controller = new AbortController(); historyController = controller; loading.value = true
     try {
       const data = await $fetch<{ points: Point[]; step: number }>('/api/history', { query: { from: new Date(start.value).toISOString(), to: new Date(end.value).toISOString() }, signal: controller.signal, timeout: 7000 })
@@ -64,6 +65,7 @@ export function useMetrics() {
     if (enabled) { paused.value = false; void loadHistory() }
   }
   function goLive() { paused.value = false; void loadHistory() }
+  watch(historyActive, (enabled) => { if (enabled) void loadHistory(); else { historyController?.abort(); loading.value = false } })
   watch(range, () => { points.value = []; void loadHistory() })
   watch(paused, (value) => { pausedAt.value = value ? Date.now() : null; if (!value) void loadHistory() })
   onMounted(() => {
@@ -79,7 +81,7 @@ export function useMetrics() {
       connected.value = true; lastReceived.value = Date.parse(next.time)
       if (!paused.value) {
         sample.value = next
-        {
+        if (historyActive.value) {
           const time = Date.parse(next.time)
           points.value = [...points.value.filter(p => Date.parse(p.time) >= time - range.value * 1000 && p.time !== next.time), next].slice(-1600)
         }
@@ -89,7 +91,7 @@ export function useMetrics() {
     interval = setInterval(() => {
       now.value = Date.now()
       if (now.value - lastMeta > 10000) { lastMeta = now.value; void loadMeta() }
-      if (!paused.value && monitoringEnabled.value && now.value - lastHistory > 30000) { lastHistory = now.value; void loadHistory() }
+      if (historyActive.value && !paused.value && monitoringEnabled.value && now.value - lastHistory > 30000) { lastHistory = now.value; void loadHistory() }
     }, 1000)
   })
   onBeforeUnmount(() => { disposed = true; stream?.close(); clearInterval(interval); historyController?.abort(); metadataController?.abort() })

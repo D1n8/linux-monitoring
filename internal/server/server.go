@@ -12,9 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"goinmetrics/internal/model"
 	"goinmetrics/internal/monitor"
-	"goinmetrics/internal/store"
 	"goinmetrics/internal/web"
 )
 
@@ -28,13 +26,11 @@ func New(m *monitor.Monitor) http.Handler {
 	s := &Server{Monitor: m, assets: assets}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", s.health)
-	mux.HandleFunc("GET /api/host", func(w http.ResponseWriter, r *http.Request) { reply(w, 200, m.Collector.Host()) })
+	mux.HandleFunc("GET /api/host", func(w http.ResponseWriter, r *http.Request) { reply(w, 200, m.Host()) })
 	mux.HandleFunc("GET /api/snapshot", func(w http.ResponseWriter, r *http.Request) { reply(w, 200, m.Latest()) })
 	mux.HandleFunc("GET /api/stream", s.stream)
 	mux.HandleFunc("GET /api/history", s.history)
-	mux.HandleFunc("GET /api/events", s.events)
-	mux.HandleFunc("GET /api/rules", s.rules)
-	mux.HandleFunc("PUT /api/rules", s.saveRule)
+	mux.HandleFunc("PUT /api/service", s.service)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) { fail(w, 404, "API-маршрут не найден") })
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "GET" && r.Method != "HEAD" {
@@ -96,55 +92,33 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 func dbContext(r *http.Request) (context.Context, context.CancelFunc) {
 	return context.WithTimeout(r.Context(), 5*time.Second)
 }
-func (s *Server) rules(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := dbContext(r)
-	defer cancel()
-	v, e := s.Monitor.Store.Rules(ctx)
-	if e != nil {
-		fail(w, 503, "Не удалось загрузить правила")
-		return
-	}
-	reply(w, 200, v)
-}
-func (s *Server) saveRule(w http.ResponseWriter, r *http.Request) {
-	if !strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
+func (s *Server) service(w http.ResponseWriter, r *http.Request) {
+	if strings.Split(r.Header.Get("Content-Type"), ";")[0] != "application/json" {
 		fail(w, 415, "Ожидается application/json")
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, 4096)
+	r.Body = http.MaxBytesReader(w, r.Body, 1024)
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
-	var rule model.Rule
-	if err := decoder.Decode(&rule); err != nil {
-		fail(w, 400, "Некорректное правило")
+	var body struct {
+		Enabled *bool `json:"enabled"`
+	}
+	if decoder.Decode(&body) != nil || body.Enabled == nil {
+		fail(w, 400, "Укажите enabled: true или false")
 		return
 	}
 	var extra any
 	if decoder.Decode(&extra) != io.EOF {
-		fail(w, 400, "Ожидается одно JSON-правило")
+		fail(w, 400, "Ожидается один JSON-объект")
 		return
 	}
-	if err := store.ValidateRule(rule); err != nil {
-		fail(w, 400, err.Error())
-		return
-	}
-	ctx, cancel := dbContext(r)
+	ctx, cancel := context.WithTimeout(r.Context(), 12*time.Second)
 	defer cancel()
-	if err := s.Monitor.Store.SaveRule(ctx, rule); err != nil {
-		fail(w, 503, "Не удалось сохранить правило")
+	if err := s.Monitor.SetEnabled(ctx, *body.Enabled); err != nil {
+		fail(w, 503, "Не удалось изменить состояние мониторинга. Проверьте подключение к БД.")
 		return
 	}
-	reply(w, 200, rule)
-}
-func (s *Server) events(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := dbContext(r)
-	defer cancel()
-	v, e := s.Monitor.Store.Events(ctx)
-	if e != nil {
-		fail(w, 503, "Не удалось загрузить события")
-		return
-	}
-	reply(w, 200, v)
+	reply(w, 200, s.Monitor.Status())
 }
 func (s *Server) history(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().UTC()
@@ -191,24 +165,32 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 	ticker := time.NewTicker(15 * time.Second)
 	defer ticker.Stop()
 	controller := http.NewResponseController(w)
-	send := func(sample model.Snapshot) bool {
+	send := func(update monitor.Update) bool {
 		_ = controller.SetWriteDeadline(time.Now().Add(5 * time.Second))
-		data, _ := json.Marshal(sample)
-		if _, err := fmt.Fprintf(w, "event: metrics\ndata: %s\n\n", data); err != nil {
+		status, _ := json.Marshal(update.Status)
+		if _, err := fmt.Fprintf(w, "event: service\ndata: %s\n\n", status); err != nil {
 			return false
+		}
+		if update.Sample != nil {
+			data, _ := json.Marshal(update.Sample)
+			if _, err := fmt.Fprintf(w, "event: metrics\ndata: %s\n\n", data); err != nil {
+				return false
+			}
 		}
 		flusher.Flush()
 		return true
 	}
-	if !send(s.Monitor.Latest()) {
+	latest := s.Monitor.Latest()
+	if !send(monitor.Update{Sample: &latest, Status: s.Monitor.Status()}) {
 		return
 	}
+
 	for {
 		select {
 		case <-r.Context().Done():
 			return
-		case sample := <-ch:
-			if !send(sample) {
+		case update := <-ch:
+			if !send(update) {
 				return
 			}
 		case <-ticker.C:

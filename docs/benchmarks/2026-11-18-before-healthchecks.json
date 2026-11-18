@@ -1,0 +1,98 @@
+{
+  "time_utc": "2026-11-18T16:08:03.251173+00:00",
+  "kernel": "6.17.0-35-generic",
+  "architecture": "x86_64",
+  "cpu_count": 12,
+  "mem_total_kib": 7431392,
+  "method": "Cumulative Docker CPU counters, working set = usage - inactive_file, sample every 5 s; one CPU core = 100%. SSE clients poll host/health every 10 s and history every 30 s. Snapshot probe every 5 s. No artificial workload; no claim of global minimum.",
+  "scenarios": [
+    {
+      "scenario": "disabled",
+      "monitoring_enabled": false,
+      "requested_viewers": 0,
+      "actual_viewers": 1,
+      "elapsed_seconds": 60.00599774799775,
+      "containers": {
+        "app": {
+          "cpu_percent_one_core": 0.33537314194015716,
+          "working_set_mib_mean": 8.294771634615385,
+          "working_set_mib_peak": 8.81640625,
+          "block_read_bytes_delta": 0,
+          "block_write_bytes_delta": 0
+        },
+        "postgres": {
+          "cpu_percent_one_core": 0.7060244240570708,
+          "working_set_mib_mean": 21.85576923076923,
+          "working_set_mib_peak": 22.1953125,
+          "block_read_bytes_delta": 0,
+          "block_write_bytes_delta": 106496
+        }
+      },
+      "collected_delta": 0,
+      "dropped_delta": 0,
+      "missed_delta": 0,
+      "snapshot_ms_p50": 0.7869940018281341,
+      "snapshot_ms_p95": 1.3180969981476665
+    },
+    {
+      "scenario": "live_1_viewers",
+      "monitoring_enabled": true,
+      "requested_viewers": 1,
+      "actual_viewers": 2,
+      "elapsed_seconds": 60.00567444400076,
+      "containers": {
+        "app": {
+          "cpu_percent_one_core": 0.5104350594139889,
+          "working_set_mib_mean": 9.041766826923077,
+          "working_set_mib_peak": 9.4140625,
+          "block_read_bytes_delta": 0,
+          "block_write_bytes_delta": 0
+        },
+        "postgres": {
+          "cpu_percent_one_core": 0.7126676001268654,
+          "working_set_mib_mean": 22.662860576923077,
+          "working_set_mib_peak": 26.38671875,
+          "block_read_bytes_delta": 0,
+          "block_write_bytes_delta": 212992
+        }
+      },
+      "collected_delta": 60,
+      "dropped_delta": 0,
+      "missed_delta": 0,
+      "snapshot_ms_p50": 0.6855879983049817,
+      "snapshot_ms_p95": 1.0745460022008047,
+      "collection_ms_p50": 0.614,
+      "collection_ms_p95": 0.723
+    },
+    {
+      "scenario": "live_5_viewers",
+      "monitoring_enabled": true,
+      "requested_viewers": 5,
+      "actual_viewers": 6,
+      "elapsed_seconds": 60.00626422599453,
+      "containers": {
+        "app": {
+          "cpu_percent_one_core": 0.7193282327564295,
+          "working_set_mib_mean": 9.737079326923077,
+          "working_set_mib_peak": 11.28515625,
+          "block_read_bytes_delta": 0,
+          "block_write_bytes_delta": 0
+        },
+        "postgres": {
+          "cpu_percent_one_core": 0.9373904662379062,
+          "working_set_mib_mean": 26.272536057692307,
+          "working_set_mib_peak": 26.9921875,
+          "block_read_bytes_delta": 0,
+          "block_write_bytes_delta": 618496
+        }
+      },
+      "collected_delta": 60,
+      "dropped_delta": 0,
+      "missed_delta": 0,
+      "snapshot_ms_p50": 0.7548459980171174,
+      "snapshot_ms_p95": 0.957516000198666,
+      "collection_ms_p50": 0.655,
+      "collection_ms_p95": 0.69
+    }
+  ]
+}

@@ -2,7 +2,7 @@
 start:
 	./start.sh
 stop:
-	docker compose down
+	./stop.sh
 frontend:
 	cd web && npm ci --no-audit --no-fund && npm run generate
 	rm -rf internal/web/public

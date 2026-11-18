@@ -1,30 +1,29 @@
-# HTTP API
+# HTTP API · v0.2
 
-База: `http://127.0.0.1:9099/api`. Ответы JSON, даты RFC3339 UTC. Значение `null` означает подготовку или отсутствие достоверного показателя. Ошибки: `{"error":"понятное сообщение"}`. Все пользователи локального сервиса равноправны.
+База: `http://127.0.0.1:9099/api`. JSON, даты RFC3339 UTC. Ошибка: `{"error":"сообщение"}`. Все допущенные пользователи равноправны.
 
 | Метод | Путь | Назначение |
 |---|---|---|
-| GET | `/health` | Запись БД, last_saved, queue, dropped, missed, started. 503 при последнем сбое хранения |
-| GET | `/host` | Имя, Linux, ядро, число CPU, uptime в секундах |
-| GET | `/snapshot` | Последнее состояние без отдельного чтения метрик |
-| GET | `/stream` | SSE, event `metrics`, один JSON-снимок в `data`; heartbeat каждые 15 секунд |
-| GET | `/history?from=…&to=…` | История: points, step, from, to; по умолчанию 15 минут |
-| GET | `/rules` | Массив общих правил |
-| PUT | `/rules` | Создать/заменить одно правило, `Content-Type: application/json` |
-| GET | `/events` | Последние 100 событий по убыванию начала |
+| GET | `/health` | monitoring_enabled, storage_ok, last_saved, queue, dropped, missed, collected, viewers, started; 503 при последней ошибке хранения |
+| GET | `/host` | Имя, Linux, ядро, число CPU, uptime в секундах. Статические сведения кешируются |
+| GET | `/snapshot` | Последний снимок без отдельного чтения Linux |
+| GET | `/stream` | SSE: `metrics` — снимок, `service` — состояние мониторинга/хранения; heartbeat каждые 15 секунд |
+| GET | `/history?from=…&to=…` | points, step, from, to; по умолчанию последние 15 минут |
+| PUT | `/service` | Включить или остановить сбор: `{"enabled":true}` / `{"enabled":false}` |
 
-Снимок: time; cpu/memory/disk в %; rx/tx в байт/с; memory_total/memory_used в байтах; load1; disks[]; networks[]; errors{source:message}; collection_ms. Набор интерфейсов и дисков может меняться. Общее заполнение дисков — максимум, не сумма.
-
-Точка истории: time; cpu/memory/disk/rx/tx (avg или null); `<metric>_min`; `<metric>_max`; count. Время — начало корзины; step — её ширина в секундах. Отсутствующие корзины нужно рисовать разрывом. Внутренние пропуски делают среднюю точку недостоверной; min/max могут сохранять известные значения.
+Управление требует `Content-Type: application/json`, явного boolean enabled, одного JSON-объекта без лишних полей; максимум 1 KiB. Остановка подтверждается после завершения очереди и сохранения настройки. При ошибке сохранения возвращается 503, прежнее состояние остаётся в силе. Повторная установка текущего состояния идемпотентна. Состояние передаётся всем SSE-зрителям.
 
 ```bash
-curl http://127.0.0.1:9099/api/snapshot
-curl -N http://127.0.0.1:9099/api/stream
-curl -X PUT http://127.0.0.1:9099/api/rules \
-  -H 'Content-Type: application/json' \
-  -d '{"metric":"cpu","threshold":85,"duration":30,"enabled":true}'
+curl -X PUT http://127.0.0.1:9099/api/service \
+  -H 'Content-Type: application/json' -d '{"enabled":false}'
 ```
 
-Допустимые metric: cpu, memory, disk, rx, tx. Для процентов threshold 0–100; для сети 0–10^15 байт/с. Duration — целые секунды 1–3600. Для выключения сохраните то же правило с enabled=false. Изменение прерывает старое событие при обработке следующего пакета.
+HTTP и PostgreSQL при таком запросе остаются запущены. Полное выключение обоих контейнеров: `./stop.sh`.
 
-Диапазон истории должен быть упорядочен и лежать в последних 24 часах. Неверный диапазон/правило — 400, недопустимый Host/Origin — 403, неверный Content-Type — 415, БД недоступна — 503. API не предоставляет публичный сетевой доступ или токены: используйте SSH.
+Снимок: time; cpu/memory/disk в %; rx/tx в байт/с; memory_total/memory_used в байтах; load1; disks[]; networks[]; errors{source:message}; collection_ms. `null` — подготовка или отсутствие достоверных данных. Общий disk — максимальное заполнение доступных файловых систем.
+
+История: time; cpu/memory/disk/rx/tx (avg или null); `<metric>_min`; `<metric>_max`; count. Время — начало корзины, step — ширина в секундах. Пропущенные корзины и null нужно рисовать разрывом. CSV интерфейса содержит средние значения, а не сырой архив.
+
+Период должен быть упорядочен и лежать в последних 24 часах. Некорректное тело/период — 400; Host/Origin/Fetch Metadata — 403; тип содержимого — 415; ошибка хранения — 503. CORS не включён. Доступ извне — через SSH.
+
+Маршруты `/events` и `/rules` удалены, возвращают 404.

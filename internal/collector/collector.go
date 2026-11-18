@@ -263,3 +263,12 @@ func (c *Collector) Host() model.Host {
 	}
 	return h
 }
+
+// Reset makes the first CPU/network sample after a stop unavailable rather than
+// reporting an average across the interval during which monitoring was disabled.
+// The scheduler is the sole caller of Collect and Reset.
+func (c *Collector) Reset() {
+	c.previousCPU = nil
+	c.previousNet = nil
+	c.previousTime = time.Time{}
+}

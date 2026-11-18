@@ -30,40 +30,10 @@ type Snapshot struct {
 	CollectionMS float64           `json:"collection_ms"`
 }
 
-func (s Snapshot) Value(metric string) *float64 {
-	switch metric {
-	case "cpu":
-		return s.CPU
-	case "memory":
-		return s.Memory
-	case "disk":
-		return s.Disk
-	case "rx":
-		return s.RX
-	case "tx":
-		return s.TX
-	}
-	return nil
-}
-
 type Host struct {
 	Name   string  `json:"name"`
 	OS     string  `json:"os"`
 	Kernel string  `json:"kernel"`
 	Cores  int     `json:"cores"`
 	Uptime float64 `json:"uptime"`
-}
-type Rule struct {
-	Metric    string  `json:"metric"`
-	Threshold float64 `json:"threshold"`
-	Duration  int     `json:"duration"`
-	Enabled   bool    `json:"enabled"`
-}
-type Event struct {
-	ID        int64      `json:"id"`
-	Metric    string     `json:"metric"`
-	Threshold float64    `json:"threshold"`
-	Started   time.Time  `json:"started"`
-	Ended     *time.Time `json:"ended"`
-	State     string     `json:"state"`
 }

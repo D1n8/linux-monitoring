@@ -10,7 +10,7 @@ import (
 )
 
 func TestBrowserBoundary(t *testing.T) {
-	handler := New(monitor.New(&collector.Collector{Proc: "/proc", Root: "/"}, nil))
+	handler := New(monitor.New(&collector.Collector{Proc: "/proc", Root: "/"}, nil, true))
 	for _, tc := range []struct {
 		name, host, origin, fetch string
 		want                      int
@@ -35,7 +35,7 @@ func TestBrowserBoundary(t *testing.T) {
 	}
 }
 func TestRejectsInvalidHistoryBeforeDatabase(t *testing.T) {
-	handler := New(monitor.New(&collector.Collector{}, nil))
+	handler := New(monitor.New(&collector.Collector{}, nil, true))
 	for _, query := range []string{"from=bad", "to=bad", "from=2000-01-01T00:00:00Z", "from=2099-01-01T00:00:00Z"} {
 		r := httptest.NewRequest("GET", "http://127.0.0.1:9099/api/history?"+query, nil)
 		w := httptest.NewRecorder()
@@ -47,7 +47,7 @@ func TestRejectsInvalidHistoryBeforeDatabase(t *testing.T) {
 }
 
 func TestGeneratedNuxtAssetsAreServed(t *testing.T) {
-	handler := New(monitor.New(&collector.Collector{}, nil))
+	handler := New(monitor.New(&collector.Collector{}, nil, true))
 	indexReq := httptest.NewRequest("GET", "http://127.0.0.1:9099/", nil)
 	index := httptest.NewRecorder()
 	handler.ServeHTTP(index, indexReq)
@@ -64,6 +64,37 @@ func TestGeneratedNuxtAssetsAreServed(t *testing.T) {
 		}
 		if strings.HasSuffix(ref[1], ".css") && !strings.HasPrefix(w.Header().Get("Content-Type"), "text/css") {
 			t.Fatalf("stylesheet MIME mismatch: %s", w.Header().Get("Content-Type"))
+		}
+	}
+}
+
+func TestServiceControlRequiresExplicitJSONBoolean(t *testing.T) {
+	handler := New(monitor.New(&collector.Collector{}, nil, true))
+	for _, tc := range []struct {
+		body, content string
+		status        int
+	}{
+		{`{}`, "application/json", 400}, {`{"enabled":null}`, "application/json", 400},
+		{`{"enabled":"false"}`, "application/json", 400}, {`{"enabled":false,"extra":1}`, "application/json", 400},
+		{`{"enabled":false} {}`, "application/json", 400}, {`{"enabled":false}`, "text/plain", 415},
+	} {
+		r := httptest.NewRequest("PUT", "http://127.0.0.1:9099/api/service", strings.NewReader(tc.body))
+		r.Header.Set("Content-Type", tc.content)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		if w.Code != tc.status {
+			t.Fatalf("body=%s status=%d", tc.body, w.Code)
+		}
+	}
+}
+func TestRemovedEventRoutes(t *testing.T) {
+	handler := New(monitor.New(&collector.Collector{}, nil, true))
+	for _, path := range []string{"events", "rules"} {
+		r := httptest.NewRequest("GET", "http://127.0.0.1:9099/api/"+path, nil)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		if w.Code != 404 {
+			t.Fatalf("removed path=%s status=%d", path, w.Code)
 		}
 	}
 }

@@ -11,3 +11,6 @@ internal/web/public/*
 .DS_Store
 
 /goinmetrics
+
+__pycache__/
+*.pyc

@@ -73,3 +73,14 @@ func TestMalformedCountersAreUnavailable(t *testing.T) {
 		t.Fatal("invalid network counter accepted")
 	}
 }
+
+// Run explicitly on the target Linux host; reports collector cost, not PostgreSQL cost.
+func BenchmarkCollect(b *testing.B) {
+	c := &Collector{Proc: "/proc", Root: "/"}
+	c.Collect(time.Now())
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		c.Collect(time.Now())
+	}
+}

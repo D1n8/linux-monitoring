@@ -1,0 +1,9 @@
+goos: linux
+goarch: amd64
+pkg: goinmetrics/internal/collector
+cpu: AMD Ryzen 5 5500U with Radeon Graphics         
+BenchmarkCollect-12    	   30190	    115811 ns/op	   31242 B/op	     117 allocs/op
+BenchmarkCollect-12    	   31922	    112703 ns/op	   31242 B/op	     117 allocs/op
+BenchmarkCollect-12    	   31585	    114953 ns/op	   31242 B/op	     117 allocs/op
+PASS
+ok  	goinmetrics/internal/collector	10.734s

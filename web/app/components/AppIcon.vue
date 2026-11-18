@@ -1,6 +1,12 @@
 <script setup lang="ts">
 withDefaults(defineProps<{ name: string; size?: number }>(), { size: 20 })
 const paths: Record<string, string> = {
+  menu: 'M4 6h16 M4 12h16 M4 18h16',
+  sun: 'M12 2v2 M12 20v2 M2 12h2 M20 12h2 M5 5l1.5 1.5 M17.5 17.5 1.5 1.5 M5 19l1.5-1.5 M17.5 6.5 1.5-1.5 M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0',
+  moon: 'M20.5 13A8.5 8.5 0 0 1 11 3.5 8.5 8.5 0 1 0 20.5 13',
+  power: 'M12 2v10 M7 4.5a9 9 0 1 0 10 0',
+  book: 'M3 3h6l3 2 3-2h6v17h-6l-3 2-3-2H3z M12 5v17 M6 7h3 M6 11h3 M15 7h3 M15 11h3',
+  panel: 'M3 3h18v18H3z M9 3v18 m7-13-4 4 4 4',
   grid: 'M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z',
   cpu: 'M8 8h8v8H8z M5 5h14v14H5z M9 2v3 M15 2v3 M9 19v3 M15 19v3 M2 9h3 M2 15h3 M19 9h3 M19 15h3',
   memory: 'M3 6h18v12H3z M7 10v4 M11 10v4 M15 10v4 M6 18v3 M10 18v3 M14 18v3 M18 18v3',

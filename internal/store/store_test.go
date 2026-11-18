@@ -3,25 +3,13 @@ package store
 import (
 	"context"
 	"goinmetrics/internal/model"
-	"math"
 	"os"
 	"testing"
 	"time"
 )
 
-func TestValidateRule(t *testing.T) {
-	for _, r := range []model.Rule{{Metric: "cpu", Threshold: 101, Duration: 1}, {Metric: "memory", Threshold: -1, Duration: 1}, {Metric: "unknown", Duration: 10}, {Metric: "disk", Threshold: 90, Duration: 0}, {Metric: "rx", Threshold: math.NaN(), Duration: 10}} {
-		if ValidateRule(r) == nil {
-			t.Fatalf("invalid rule accepted: %+v", r)
-		}
-	}
-	if err := ValidateRule(model.Rule{Metric: "rx", Threshold: 1e9, Duration: 60}); err != nil {
-		t.Fatal(err)
-	}
-}
-
 // TEST_DATABASE_URL must reference a disposable, dedicated test database.
-func TestPostgresHistoryEventsAndRetention(t *testing.T) {
+func TestPostgresHistorySettingsAndRetention(t *testing.T) {
 	url := os.Getenv("TEST_DATABASE_URL")
 	if url == "" {
 		t.Skip("set TEST_DATABASE_URL to run PostgreSQL integration")
@@ -32,14 +20,11 @@ func TestPostgresHistoryEventsAndRetention(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Pool.Close()
-	if _, err = s.Pool.Exec(ctx, "TRUNCATE samples,events RESTART IDENTITY; UPDATE rules SET enabled=false"); err != nil {
+	if _, err = s.Pool.Exec(ctx, "TRUNCATE samples; UPDATE service_settings SET monitoring_enabled=true"); err != nil {
 		t.Fatal(err)
 	}
-	if err = s.SaveRule(ctx, model.Rule{Metric: "cpu", Threshold: 80, Duration: 2, Enabled: true}); err != nil {
-		t.Fatal(err)
-	}
-	now := time.Now().UTC().Truncate(time.Microsecond).Add(-20 * time.Second)
-	high, low := 95.0, 20.0
+	now := time.Now().UTC().Truncate(time.Second).Add(-20 * time.Second)
+	high, low := 95., 20.
 	samples := []model.Snapshot{}
 	for i := 0; i < 4; i++ {
 		v := high
@@ -51,22 +36,28 @@ func TestPostgresHistoryEventsAndRetention(t *testing.T) {
 	if err = s.Write(ctx, samples); err != nil {
 		t.Fatal(err)
 	}
-	events, err := s.Events(ctx)
-	if err != nil || len(events) != 1 || events[0].State != "resolved" || !events[0].Started.Equal(now) {
-		t.Fatalf("events=%+v err=%v", events, err)
-	}
+	if err = s.Write(ctx, samples); err != nil {
+		t.Fatal(err)
+	} // Retrying a timestamp does not duplicate it.
 	points, _, err := s.History(ctx, now.Add(-time.Second), now.Add(5*time.Second))
 	if err != nil || len(points) != 4 {
 		t.Fatalf("points=%+v err=%v", points, err)
 	}
-	// A gap breaks continuous threshold timing and interrupts an active event.
-	next := []model.Snapshot{{Time: now.Add(4 * time.Second), CPU: &high}, {Time: now.Add(5 * time.Second), CPU: &high}, {Time: now.Add(6 * time.Second), CPU: &high}, {Time: now.Add(10 * time.Second), CPU: &high}}
-	if err = s.Write(ctx, next); err != nil {
+	if err = s.SetEnabled(ctx, false); err != nil {
 		t.Fatal(err)
 	}
-	events, err = s.Events(ctx)
-	if err != nil || len(events) != 2 || events[0].State != "interrupted" {
-		t.Fatalf("gap events=%+v err=%v", events, err)
+	reopened, err := Open(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Pool.Close()
+	enabled, err := reopened.Enabled(ctx)
+	if err != nil || enabled {
+		t.Fatalf("disabled state lost: enabled=%v err=%v", enabled, err)
+	}
+	points, _, err = reopened.History(ctx, now.Add(-time.Second), now.Add(5*time.Second))
+	if err != nil || len(points) != 4 {
+		t.Fatalf("restart points=%d err=%v", len(points), err)
 	}
 	if err = s.Write(ctx, []model.Snapshot{{Time: now.Add(-25 * time.Hour), CPU: &low}}); err != nil {
 		t.Fatal(err)
@@ -78,21 +69,23 @@ func TestPostgresHistoryEventsAndRetention(t *testing.T) {
 	if err = s.Pool.QueryRow(ctx, "SELECT count(*) FROM samples WHERE time < now()-interval '24 hours'").Scan(&count); err != nil || count != 0 {
 		t.Fatalf("retention count=%d err=%v", count, err)
 	}
-	// Reopening the store preserves saved history and interrupts old active events.
-	if err = s.Write(ctx, []model.Snapshot{{Time: now.Add(11 * time.Second), CPU: &high}, {Time: now.Add(12 * time.Second), CPU: &high}, {Time: now.Add(13 * time.Second), CPU: &high}}); err != nil {
+	// Downsampling retains the peak. A missing metric does not become zero.
+	if _, err = s.Pool.Exec(ctx, "TRUNCATE samples"); err != nil {
 		t.Fatal(err)
 	}
-	reopened, err := Open(ctx, url)
-	if err != nil {
+	bucket := now.Truncate(144 * time.Second)
+	if err = s.Write(ctx, []model.Snapshot{{Time: bucket, CPU: &low}, {Time: bucket.Add(time.Second), CPU: &high}}); err != nil {
 		t.Fatal(err)
 	}
-	defer reopened.Pool.Close()
-	events, err = reopened.Events(ctx)
-	if err != nil || events[0].State != "interrupted" {
-		t.Fatalf("restart events=%+v err=%v", events, err)
+	points, _, err = s.History(ctx, bucket.Add(-12*time.Hour), bucket.Add(12*time.Hour))
+	if err != nil || len(points) != 1 || points[0].CPU == nil || *points[0].CPUMax != 95 || *points[0].CPUMin != 20 {
+		t.Fatalf("aggregates=%+v err=%v", points, err)
 	}
-	points, _, err = reopened.History(ctx, now.Add(-time.Second), now.Add(15*time.Second))
-	if err != nil || len(points) != 11 {
-		t.Fatalf("restart points=%d err=%v", len(points), err)
+	if err = s.Write(ctx, []model.Snapshot{{Time: bucket.Add(2 * time.Second)}}); err != nil {
+		t.Fatal(err)
+	}
+	points, _, err = s.History(ctx, bucket.Add(-12*time.Hour), bucket.Add(12*time.Hour))
+	if err != nil || points[0].CPU != nil {
+		t.Fatalf("missing source must break bucket: %+v err=%v", points, err)
 	}
 }

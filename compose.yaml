@@ -14,7 +14,9 @@ services:
       - socket:/var/run/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U goinmetrics -d goinmetrics"]
-      interval: 5s
+      interval: 30s
+      start_period: 10s
+      start_interval: 2s
       timeout: 3s
       retries: 12
     mem_limit: 256m
@@ -23,6 +25,7 @@ services:
       driver: json-file
       options: {max-size: "5m", max-file: "2"}
   app:
+    image: goinmetrics-app:latest
     build: .
     restart: unless-stopped
     # Linux host networking exposes host NIC counters. HTTP still binds loopback only.
@@ -48,7 +51,9 @@ services:
     mem_limit: 128m
     healthcheck:
       test: ["CMD", "/usr/local/bin/goinmetrics", "healthcheck"]
-      interval: 10s
+      interval: 30s
+      start_period: 10s
+      start_interval: 2s
       timeout: 3s
       retries: 3
     logging:

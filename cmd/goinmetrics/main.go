@@ -41,7 +41,7 @@ func run() error {
 	if err != nil || (host != "127.0.0.1" && host != "::1") {
 		return fmt.Errorf("LISTEN_ADDR должен указывать loopback-адрес")
 	}
-	// Bind before migrating: a second instance must not interrupt the first instance's alerts.
+	// Bind before migrating so a second instance fails without changing shared state.
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("порт занят или недоступен: %w", err)
@@ -57,7 +57,11 @@ func run() error {
 	}
 	defer db.Pool.Close()
 	c := &collector.Collector{Proc: env("HOST_PROC", "/proc"), Root: env("HOST_ROOT", "/")}
-	m := monitor.New(c, db)
+	enabled, err := db.Enabled(initCtx)
+	if err != nil {
+		return fmt.Errorf("состояние мониторинга: %w", err)
+	}
+	m := monitor.New(c, db, enabled)
 	done := make(chan struct{})
 	go func() { defer close(done); m.Run(ctx) }()
 	httpServer := &http.Server{Handler: server.New(m), BaseContext: func(net.Listener) context.Context { return ctx }, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16384}

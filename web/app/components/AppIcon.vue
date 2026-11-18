@@ -2,7 +2,7 @@
 withDefaults(defineProps<{ name: string; size?: number }>(), { size: 20 })
 const paths: Record<string, string> = {
   menu: 'M4 6h16 M4 12h16 M4 18h16',
-  sun: 'M12 2v2 M12 20v2 M2 12h2 M20 12h2 M5 5l1.5 1.5 M17.5 17.5 1.5 1.5 M5 19l1.5-1.5 M17.5 6.5 1.5-1.5 M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0',
+  sun: 'M12 3v2 M12 19v2 M3 12h2 M19 12h2 M5.64 5.64l1.42 1.42 M16.94 16.94l1.42 1.42 M5.64 18.36l1.42-1.42 M16.94 7.06l1.42-1.42',
   moon: 'M20.5 13A8.5 8.5 0 0 1 11 3.5 8.5 8.5 0 1 0 20.5 13',
   power: 'M12 2v10 M7 4.5a9 9 0 1 0 10 0',
   book: 'M3 3h6l3 2 3-2h6v17h-6l-3 2-3-2H3z M12 5v17 M6 7h3 M6 11h3 M15 7h3 M15 11h3',
@@ -17,6 +17,7 @@ const paths: Record<string, string> = {
   info: 'M12 17v-5 M12 8h.01 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',
   server: 'M3 3h18v7H3z M3 14h18v7H3z M7 6h.01 M7 17h.01 M11 6h6 M11 17h6',
   arrow: 'M7 17 17 7 M7 7h10v10',
+  'chevron-left': 'm15 5-7 7 7 7',
   chevron: 'm9 5 7 7-7 7',
   download: 'M12 3v12 M7 10l5 5 5-5 M4 16v5h16v-5',
   pause: 'M8 4v16 M16 4v16',
@@ -29,4 +30,4 @@ const paths: Record<string, string> = {
   help: 'M9 9a3 3 0 1 1 5 2c-2 1-2 2-2 3 M12 18h.01 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0'
 }
 </script>
-<template><svg :width="size" :height="size" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path :d="paths[name] || paths.info" /></svg></template>
+<template><svg :width="size" :height="size" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle v-if="name === 'sun'" cx="12" cy="12" r="4" /><path :d="paths[name] || paths.info" /></svg></template>
